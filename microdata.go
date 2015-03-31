@@ -1,4 +1,19 @@
-// Copyright 2015 Lars Wiegman
+// Copyright 2015 Lars Wiegman. All rights reserved. Use of this source code is
+// governed by a BSD-style license that can be found in the LICENSE file.
+
+/*
+
+Microdata is a package for the Go programming language to extract HTML
+Microdata from HTML5 documents. It depends on the
+golang.org/x/net/html HTML5-compliant parser.
+
+Usage:
+	var result microdata.Result
+	result, _ = microdata.ParseURL("http://example.com/blogposting")
+	b, _ := json.MarshalIndent(result, "", "  ")
+	os.Stdout.Write(b)
+
+*/
 
 package microdata
 
