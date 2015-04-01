@@ -3,9 +3,13 @@ Microdata
 
 Microdata is a package for the Go programming language to extract [HTML Microdata][0] from HTML5 documents. It depends on the [golang.org/x/net/html][1] HTML5-compliant parser.
 
+__HTML Microdata__ is a markup specification often used in combination with the [schema collection][3] to make it easier for search engines to identify and understand content on web pages. One of the most common schema is the rating you see when you google for something. Other schemas are persons, places, events, products, etc.
+
 
 Command Line
 ------------
+
+The command line utility returns a JSON object containing any items in the given HTML document.
 
 __Install:__
 
@@ -60,7 +64,7 @@ For documentation see [godoc.org/github.com/namsral/microdata][2].
 [0]: http://www.w3.org/TR/microdata
 [1]: https://golang.org/x/net/html
 [2]: http://godoc.org/github.com/namsral/microdata
-
+[3]: http://schema.org
 
 License
 -------
