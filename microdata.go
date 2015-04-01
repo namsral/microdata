@@ -21,7 +21,7 @@
 package microdata
 
 import (
-	"errors"
+	"bytes"
 	"io"
 	"net/http"
 	"net/url"
@@ -31,71 +31,69 @@ import (
 	"golang.org/x/net/html/charset"
 )
 
-var (
-	ErrInvalidPropertyType Error = errors.New("invalid property type")
-)
-
-type Error error
-
-type Result struct {
+type Microdata struct {
 	Items []*Item `json:"items"`
 }
 
+// addItem adds the item to the items list.
+func (m *Microdata) addItem(item *Item) {
+	m.Items = append(m.Items, item)
+}
+
 type Item struct {
-	Type       []string               `json:"type"`
-	Properties map[string]interface{} `json:"properties"`
-	Id         string                 `json:"id,omitempty"`
+	Types      []string    `json:"type"`
+	Properties PropertyMap `json:"properties"`
+	Id         string      `json:"id,omitempty"`
 }
 
-// addProperty adds the key, property to the Item. It appends to any existing
-// properties associated with the key.
-func (item *Item) addProperty(key string, property interface{}) error {
-	switch property.(type) {
-	case *Item:
-		if a, ok := item.Properties[key]; ok {
-			item.Properties[key] = append((a).([]*Item), (property).(*Item))
-		} else {
-			item.Properties[key] = []*Item{(property).(*Item)}
-		}
-	case string:
-		if a, ok := item.Properties[key]; ok {
-			item.Properties[key] = append((a).([]string), (property).(string))
-		} else {
-			item.Properties[key] = []string{(property).(string)}
-		}
-	default:
-		return ErrInvalidPropertyType
-	}
-	return nil
+type ValueList []interface{}
+
+type PropertyMap map[string]ValueList
+
+// addString adds the key, value pair to the properties map. It appends to any
+// existing properties associated with key.
+func (i *Item) addString(key, value string) {
+	i.Properties[key] = append(i.Properties[key], value)
 }
 
-// NewItem returns a new Item with the given itemtype(s).
-func NewItem(itemtype []string) *Item {
-	props := make(map[string]interface{})
+// addItem adds the key, value pair to the properties map. It appends to any
+// existing properties associated with key.
+func (i *Item) addItem(key string, value *Item) {
+	i.Properties[key] = append(i.Properties[key], value)
+}
+
+// addType adds the value to the types list.
+func (i *Item) addType(value string) {
+	i.Types = append(i.Types, value)
+}
+
+// NewItem returns a new Item.
+func NewItem() *Item {
 	return &Item{
-		Type:       itemtype,
-		Properties: props,
+		Types:      make([]string, 0),
+		Properties: make(PropertyMap, 0),
 	}
 }
 
 // Parse parses the HTML document available in the given reader and returns the
-// result. The given baseURL is used to complete incomplete URLs in src and href
-// attributes. The given contentType is used convert the content of r to UTF-8.
-func Parse(r io.Reader, baseURL string, contentType string) (Result, error) {
-	result := Result{}
+// microdata. The given baseURL is used to complete incomplete URLs in src and
+// href attributes. The given contentType is used convert the content of r to
+// UTF-8.
+func Parse(r io.Reader, baseURL string, contentType string) (Microdata, error) {
+	data := Microdata{}
 	u, err := url.Parse(baseURL)
 
 	r, err = charset.NewReader(r, contentType)
 	if err != nil {
-		return result, err
+		return data, err
 	}
 
 	doc, err := html.Parse(r)
 	if err != nil {
-		return result, err
+		return data, err
 	}
 
-	var item *Item
+	item := NewItem()
 	var f func(*html.Node, *Item) error
 	f = func(n *html.Node, item *Item) error {
 		switch n.Type {
@@ -124,19 +122,20 @@ func Parse(r io.Reader, baseURL string, contentType string) (Result, error) {
 
 			// New Item
 			if itemscope && len(itemtype) > 0 {
-				i := NewItem(itemtype)
+				i := NewItem()
+				for _, v := range itemtype {
+					i.addType(v)
+				}
 				switch {
 				case len(itemid) > 0:
 					i.Id = itemid
-					result.Items = append(result.Items, i)
+					data.addItem(i)
 				case len(itemprop) == 0:
-					result.Items = append(result.Items, i)
+					data.addItem(i)
 				case len(itemprop) > 0:
 					// Might not be a valid spec
 					for _, key := range itemprop {
-						if err := item.addProperty(key, i); err != nil {
-							return err
-						}
+						item.addItem(key, i)
 					}
 				}
 				item = i
@@ -144,27 +143,25 @@ func Parse(r io.Reader, baseURL string, contentType string) (Result, error) {
 			}
 
 			// New Property
-			if item != nil && len(itemprop) > 0 {
+			if len(itemprop) > 0 {
 				for _, key := range itemprop {
 					if len(value) < 1 {
-						var s string
+						var buf bytes.Buffer
 						var f func(*html.Node)
 						f = func(n *html.Node) {
 							if n.Type == html.TextNode {
-								s += n.Data
+								buf.WriteString(n.Data)
 							}
 							for c := n.FirstChild; c != nil; c = c.NextSibling {
 								f(c)
 							}
 						}
 						f(n)
-						if len(s) > 0 {
-							value = s
+						if buf.Len() > 0 {
+							value = buf.String()
 						}
 					}
-					if err := item.addProperty(key, value); err != nil {
-						return err
-					}
+					item.addString(key, value)
 				}
 				break
 			}
@@ -178,20 +175,20 @@ func Parse(r io.Reader, baseURL string, contentType string) (Result, error) {
 		return nil
 	}
 	if err := f(doc, item); err != nil {
-		return result, err
+		return data, err
 	}
 
-	return result, nil
+	return data, nil
 }
 
 // ParseURL parses the HTML document available at the given URL and returns the
-// result.
-func ParseURL(urlStr string) (Result, error) {
-	var result Result
+// microdata.
+func ParseURL(urlStr string) (Microdata, error) {
+	var data Microdata
 
 	resp, err := http.DefaultClient.Get(urlStr)
 	if err != nil {
-		return result, err
+		return data, err
 	}
 	contentType := resp.Header.Get("Content-Type")
 

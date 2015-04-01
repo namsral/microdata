@@ -1,5 +1,4 @@
-// Copyright 2015 Lars Wiegman. All rights reserved. Use of this source code is
-// governed by a BSD-style license that can be found in the LICENSE file.
+// Copyright 2015 Lars Wiegman
 
 package main
 
@@ -14,7 +13,7 @@ import (
 )
 
 func main() {
-	var result microdata.Result
+	var data microdata.Microdata
 	var err error
 
 	baseURL := flag.String("base-url", "http://example.com", "base url to use for the data in the stdin stream.")
@@ -32,28 +31,28 @@ func main() {
 	// Items from URL
 	if args := flag.Args(); len(args) > 0 {
 		urlStr := args[0]
-		result, err = microdata.ParseURL(urlStr)
+		data, err = microdata.ParseURL(urlStr)
 		if err != nil {
 			fmt.Println(err)
 			os.Exit(1)
 		}
-		printResult(os.Stdout, result)
+		printResult(os.Stdout, data)
 		return
 	}
 
 	// Items from STDIN
 	r := os.Stdin
-	result, err = microdata.Parse(r, *baseURL, *contentType)
+	data, err = microdata.Parse(r, *baseURL, *contentType)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
-	printResult(os.Stdout, result)
+	printResult(os.Stdout, data)
 }
 
 // printResult pretty formats and prints the given items in a JSON object.
-func printResult(w io.Writer, result microdata.Result) {
-	b, err := json.MarshalIndent(result, "", "  ")
+func printResult(w io.Writer, data microdata.Microdata) {
+	b, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
