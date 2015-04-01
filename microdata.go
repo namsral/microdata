@@ -3,16 +3,19 @@
 
 /*
 
-Microdata is a package for the Go programming language to extract HTML
-Microdata from HTML5 documents. It depends on the
-golang.org/x/net/html HTML5-compliant parser.
+	Package flag implements command-line flag parsing.
+	Package microdata implements a HTML microdata parser. It depends on the
+	golang.org/x/net/html HTML5-compliant parser.
 
-Usage:
-	var result microdata.Result
-	result, _ = microdata.ParseURL("http://example.com/blogposting")
-	b, _ := json.MarshalIndent(result, "", "  ")
-	os.Stdout.Write(b)
+	Usage:
 
+	Pass a reader, baseURL and contentType to the Parse function.
+		data, err := microdata.Parse(reader, baseURL, contentType)
+		items := data.Items
+
+	Pass an URL to the ParseURL function.
+		data, _ := microdata.ParseURL("http://example.com/blogposting")
+		items := data.Items
 */
 
 package microdata
