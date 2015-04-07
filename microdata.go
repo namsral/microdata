@@ -90,7 +90,7 @@ func (p *parser) parse() (*Microdata, error) {
 
 	walkNodes(p.tree, func(n *html.Node) {
 		if _, ok := getAttr("itemscope", n); ok {
-			if _, ok := getAttr("itemtype", n); ok {
+			if _, ok := getAttr("itemprop", n); !ok {
 				toplevelNodes = append(toplevelNodes, n)
 			}
 		}
