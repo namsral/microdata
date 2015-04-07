@@ -3,194 +3,287 @@
 
 /*
 
-Microdata is a package for the Go programming language to extract HTML
-Microdata from HTML5 documents. It depends on the
-golang.org/x/net/html HTML5-compliant parser.
+	Package flag implements command-line flag parsing.
+	Package microdata implements a HTML microdata parser. It depends on the
+	golang.org/x/net/html HTML5-compliant parser.
 
-Usage:
-	var result microdata.Result
-	result, _ = microdata.ParseURL("http://example.com/blogposting")
-	b, _ := json.MarshalIndent(result, "", "  ")
-	os.Stdout.Write(b)
+	Usage:
 
+	Pass a reader, baseURL and contentType to the Parse function.
+		data, err := microdata.Parse(reader, baseURL, contentType)
+		items := data.Items
+
+	Pass an URL to the ParseURL function.
+		data, _ := microdata.ParseURL("http://example.com/blogposting")
+		items := data.Items
 */
 
 package microdata
 
 import (
-	"errors"
+	"bytes"
 	"io"
 	"net/http"
 	"net/url"
 	"strings"
 
 	"golang.org/x/net/html"
+	"golang.org/x/net/html/atom"
 	"golang.org/x/net/html/charset"
 )
 
-var (
-	ErrInvalidPropertyType Error = errors.New("invalid property type")
-)
-
-type Error error
-
-type Result struct {
+type Microdata struct {
 	Items []*Item `json:"items"`
 }
 
+// addItem adds the item to the items list.
+func (m *Microdata) addItem(item *Item) {
+	m.Items = append(m.Items, item)
+}
+
+type ValueList []interface{}
+
+type PropertyMap map[string]ValueList
+
 type Item struct {
-	Type       []string               `json:"type"`
-	Properties map[string]interface{} `json:"properties"`
-	Id         string                 `json:"id,omitempty"`
+	Types      []string    `json:"type"`
+	Properties PropertyMap `json:"properties"`
+	Id         string      `json:"id,omitempty"`
 }
 
-// addProperty adds the key, property to the Item. It appends to any existing
-// properties associated with the key.
-func (item *Item) addProperty(key string, property interface{}) error {
-	switch property.(type) {
-	case *Item:
-		if a, ok := item.Properties[key]; ok {
-			item.Properties[key] = append((a).([]*Item), (property).(*Item))
-		} else {
-			item.Properties[key] = []*Item{(property).(*Item)}
-		}
-	case string:
-		if a, ok := item.Properties[key]; ok {
-			item.Properties[key] = append((a).([]string), (property).(string))
-		} else {
-			item.Properties[key] = []string{(property).(string)}
-		}
-	default:
-		return ErrInvalidPropertyType
-	}
-	return nil
+// addString adds the property, value pair to the properties map. It appends to any
+// existing property.
+func (i *Item) addString(property, value string) {
+	i.Properties[property] = append(i.Properties[property], value)
 }
 
-// NewItem returns a new Item with the given itemtype(s).
-func NewItem(itemtype []string) *Item {
-	props := make(map[string]interface{})
+// addItem adds the property, value pair to the properties map. It appends to any
+// existing property.
+func (i *Item) addItem(property string, value *Item) {
+	i.Properties[property] = append(i.Properties[property], value)
+}
+
+// addType adds the value to the types list.
+func (i *Item) addType(value string) {
+	i.Types = append(i.Types, value)
+}
+
+// NewItem returns a new Item.
+func NewItem() *Item {
 	return &Item{
-		Type:       itemtype,
-		Properties: props,
+		Types:      make([]string, 0),
+		Properties: make(PropertyMap, 0),
 	}
 }
 
-// Parse parses the HTML document available in the given reader and returns the
-// result. The given baseURL is used to complete incomplete URLs in src and href
-// attributes. The given contentType is used convert the content of r to UTF-8.
-func Parse(r io.Reader, baseURL string, contentType string) (Result, error) {
-	result := Result{}
-	u, err := url.Parse(baseURL)
+type parser struct {
+	tree            *html.Node
+	data            *Microdata
+	baseURL         *url.URL
+	identifiedNodes map[string]*html.Node
+}
 
-	r, err = charset.NewReader(r, contentType)
-	if err != nil {
-		return result, err
-	}
+// parse returns the microdata from the parser's node tree.
+func (p *parser) parse() (*Microdata, error) {
 
-	doc, err := html.Parse(r)
-	if err != nil {
-		return result, err
-	}
+	toplevelNodes := []*html.Node{}
 
-	var item *Item
-	var f func(*html.Node, *Item) error
-	f = func(n *html.Node, item *Item) error {
-		switch n.Type {
-		case html.ElementNode:
-			var itemscope bool
-			var itemtype, itemprop []string
-			var value, itemid string
+	walkNodes(p.tree, func(n *html.Node) {
+		if _, ok := getAttr("itemscope", n); ok {
+			if _, ok := getAttr("itemtype", n); ok {
+				toplevelNodes = append(toplevelNodes, n)
+			}
+		}
+		if id, ok := getAttr("id", n); ok {
+			p.identifiedNodes[id] = n
+		}
+	})
 
-			for _, attr := range n.Attr {
-				switch attr.Key {
-				case "itemscope":
-					itemscope = true
-				case "itemtype":
-					itemtype = strings.Split(attr.Val, " ")
-				case "itemprop":
-					itemprop = strings.Split(attr.Val, " ")
-				case "src", "href":
-					refURL, _ := u.Parse(attr.Val)
-					value = refURL.String()
-				case "content", "data", "datetime":
-					value = attr.Val
-				case "itemid":
-					itemid = attr.Val
+	for _, node := range toplevelNodes {
+		item := NewItem()
+		p.data.Items = append(p.data.Items, item)
+		if s, ok := getAttr("itemtype", node); ok {
+			for _, itemtype := range strings.Split(s, " ") {
+				if len(itemtype) > 0 {
+					item.addType(itemtype)
 				}
 			}
 
-			// New Item
-			if itemscope && len(itemtype) > 0 {
-				i := NewItem(itemtype)
-				switch {
-				case len(itemid) > 0:
-					i.Id = itemid
-					result.Items = append(result.Items, i)
-				case len(itemprop) == 0:
-					result.Items = append(result.Items, i)
-				case len(itemprop) > 0:
-					// Might not be a valid spec
-					for _, key := range itemprop {
-						if err := item.addProperty(key, i); err != nil {
-							return err
-						}
-					}
+			if s, ok := getAttr("itemid", node); ok {
+				if u, err := p.baseURL.Parse(s); err == nil {
+					item.Id = u.String()
 				}
-				item = i
-				break
-			}
-
-			// New Property
-			if item != nil && len(itemprop) > 0 {
-				for _, key := range itemprop {
-					if len(value) < 1 {
-						var s string
-						var f func(*html.Node)
-						f = func(n *html.Node) {
-							if n.Type == html.TextNode {
-								s += n.Data
-							}
-							for c := n.FirstChild; c != nil; c = c.NextSibling {
-								f(c)
-							}
-						}
-						f(n)
-						if len(s) > 0 {
-							value = s
-						}
-					}
-					if err := item.addProperty(key, value); err != nil {
-						return err
-					}
-				}
-				break
 			}
 		}
 
+		if s, ok := getAttr("itemref", node); ok {
+			for _, itemref := range strings.Split(s, " ") {
+				if len(itemref) > 0 {
+					if n, ok := p.identifiedNodes[itemref]; ok {
+						p.readItem(item, n)
+					}
+				}
+			}
+		}
+
+		for c := node.FirstChild; c != nil; c = c.NextSibling {
+			p.readItem(item, c)
+		}
+	}
+	return p.data, nil
+}
+
+// readItem parses the given node and populates the given item with the result.
+func (p *parser) readItem(item *Item, node *html.Node) {
+	if itemprops, ok := getAttr("itemprop", node); ok {
+		if _, ok := getAttr("itemscope", node); ok {
+			subItem := NewItem()
+
+			if itemrefs, ok := getAttr("itemref", node); ok {
+				for _, itemref := range strings.Split(itemrefs, " ") {
+					if len(itemref) > 0 {
+						if n, ok := p.identifiedNodes[itemref]; ok {
+							p.readItem(subItem, n)
+						}
+					}
+				}
+			}
+
+			for c := node.FirstChild; c != nil; c = c.NextSibling {
+				p.readItem(subItem, c)
+			}
+
+			for _, propName := range strings.Split(itemprops, " ") {
+				if len(propName) > 0 {
+					item.addItem(propName, subItem)
+				}
+			}
+			return
+		} else {
+			var propValue string
+
+			switch node.DataAtom {
+			case atom.Meta:
+				if value, ok := getAttr("content", node); ok {
+					propValue = value
+				}
+			case atom.Audio, atom.Embed, atom.Iframe, atom.Img, atom.Source, atom.Track, atom.Video:
+				if value, ok := getAttr("src", node); ok {
+					if u, err := p.baseURL.Parse(value); err == nil {
+						propValue = u.String()
+					}
+				}
+			case atom.A, atom.Area, atom.Link:
+				if value, ok := getAttr("href", node); ok {
+					if u, err := p.baseURL.Parse(value); err == nil {
+						propValue = u.String()
+					}
+				}
+			case atom.Data, atom.Meter:
+				if value, ok := getAttr("value", node); ok {
+					propValue = value
+				}
+			case atom.Time:
+				if value, ok := getAttr("datetime", node); ok {
+					propValue = value
+				}
+			default:
+				var buf bytes.Buffer
+				walkNodes(node, func(n *html.Node) {
+					if n.Type == html.TextNode {
+						buf.WriteString(n.Data)
+					}
+				})
+				propValue = buf.String()
+			}
+
+			if len(propValue) > 0 {
+				for _, propName := range strings.Split(itemprops, " ") {
+					if len(propName) > 0 {
+						item.addString(propName, propValue)
+					}
+				}
+			}
+		}
+	}
+
+	for c := node.FirstChild; c != nil; c = c.NextSibling {
+		p.readItem(item, c)
+	}
+}
+
+// newParser returns a parser that converts the content of r to UTF-8 based on the content type of r.
+func newParser(r io.Reader, contentType string, baseURL *url.URL) (*parser, error) {
+	r, err := charset.NewReader(r, contentType)
+	if err != nil {
+		return nil, err
+	}
+
+	tree, err := html.Parse(r)
+	if err != nil {
+		return nil, err
+	}
+
+	return &parser{
+		tree:            tree,
+		data:            &Microdata{},
+		baseURL:         baseURL,
+		identifiedNodes: make(map[string]*html.Node),
+	}, nil
+}
+
+// getAttr returns the value associated with the given attribute from the given node.
+func getAttr(attribute string, node *html.Node) (string, bool) {
+	for _, attr := range node.Attr {
+		if attribute == attr.Key {
+			return attr.Val, true
+		}
+	}
+	return "", false
+}
+
+// walkNodes traverses the node tree executing the given functions.
+func walkNodes(n *html.Node, f func(*html.Node)) {
+	if n != nil {
+		f(n)
 		for c := n.FirstChild; c != nil; c = c.NextSibling {
-			if err := f(c, item); err != nil {
-				return err
-			}
+			walkNodes(c, f)
 		}
-		return nil
 	}
-	if err := f(doc, item); err != nil {
-		return result, err
-	}
+}
 
-	return result, nil
+// ParseHTML parses the HTML document available in the given reader and returns
+// the microdata. The given url is used to resolve the URLs in the
+// attributes. The given contentType is used convert the content of r to UTF-8.
+func ParseHTML(r io.Reader, contentType string, u *url.URL) (*Microdata, error) {
+	p, err := newParser(r, contentType, u)
+	if err != nil {
+		return nil, err
+	}
+	return p.parse()
 }
 
 // ParseURL parses the HTML document available at the given URL and returns the
-// result.
-func ParseURL(urlStr string) (Result, error) {
-	var result Result
+// microdata.
+func ParseURL(urlStr string) (*Microdata, error) {
+	var data *Microdata
+
+	u, err := url.Parse(urlStr)
+	if err != nil {
+		return nil, err
+	}
 
 	resp, err := http.DefaultClient.Get(urlStr)
 	if err != nil {
-		return result, err
+		return data, err
 	}
+
 	contentType := resp.Header.Get("Content-Type")
 
-	return Parse(resp.Body, urlStr, contentType)
+	p, err := newParser(resp.Body, contentType, u)
+	if err != nil {
+		return nil, err
+	}
+
+	return p.parse()
 }
