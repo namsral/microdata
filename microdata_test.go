@@ -10,12 +10,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"os"
 	"strings"
 	"testing"
 )
 
-func TestItemScope(t *testing.T) {
+func TestParseItemScope(t *testing.T) {
 	html := `
 		<div itemscope itemtype="http://example.com/Person">
 			<p>My name is <span itemprop="name">Penelope</span>.</p>
@@ -26,11 +25,11 @@ func TestItemScope(t *testing.T) {
 	result := len(data.Items[0].Properties)
 	expected := 1
 	if result != expected {
-		t.Errorf("Result should have been \"%d\", but it was \"%d\"", result, expected)
+		t.Errorf("Result should have been \"%d\", but it was \"%d\"", expected, result)
 	}
 }
 
-func TestItemType(t *testing.T) {
+func TestParseItemType(t *testing.T) {
 	html := `
 		<div itemscope itemtype="http://example.com/Person">
 			<p>My name is <span itemprop="name">Penelope</span>.</p>
@@ -41,11 +40,11 @@ func TestItemType(t *testing.T) {
 	result := data.Items[0].Types[0]
 	expected := "http://example.com/Person"
 	if result != expected {
-		t.Errorf("Result should have been \"%s\", but it was \"%s\"", result, expected)
+		t.Errorf("Result should have been \"%s\", but it was \"%s\"", expected, result)
 	}
 }
 
-func TestItemRef(t *testing.T) {
+func TestParseItemRef(t *testing.T) {
 	html := `
 		<div itemscope itemtype="http://example.com/Movie" itemref="properties">
 			<p><span itemprop="name">Rear Window</span> is a movie from 1954.</p>
@@ -72,7 +71,7 @@ func TestItemRef(t *testing.T) {
 	}
 }
 
-func TestItemProp(t *testing.T) {
+func TestParseItemProp(t *testing.T) {
 	html := `
 		<div itemscope itemtype="http://example.com/Person">
 			<p>My name is <span itemprop="name">Penelope</span>.</p>
@@ -83,7 +82,23 @@ func TestItemProp(t *testing.T) {
 	result := data.Items[0].Properties["name"][0].(string)
 	expected := "Penelope"
 	if result != expected {
-		t.Errorf("Result should have been \"%s\", but it was \"%s\"", result, expected)
+		t.Errorf("Result should have been \"%s\", but it was \"%s\"", expected, result)
+	}
+}
+
+func TestParseItemId(t *testing.T) {
+	html := `
+		<ul itemscope itemtype="http://example.com/Book" itemid="urn:isbn:978-0141196404">
+			<li itemprop="title">The Black Cloud</li>
+			<li itemprop="author">Fred Hoyle</li>
+		</ul>`
+
+	data := ParseData(html, t)
+
+	result := data.Items[0].Id
+	expected := "urn:isbn:978-0141196404"
+	if result != expected {
+		t.Errorf("Result should have been \"%s\", but it was \"%s\"", expected, result)
 	}
 }
 
@@ -162,7 +177,7 @@ func TestParseMetaContent(t *testing.T) {
 	result := data.Items[0].Properties["length"][0].(string)
 	expected := "1.70"
 	if result != expected {
-		t.Errorf("Result should have been \"%s\", but it was \"%s\"", result, expected)
+		t.Errorf("Result should have been \"%s\", but it was \"%s\"", expected, result)
 	}
 }
 
@@ -201,7 +216,7 @@ func TestParseDatetime(t *testing.T) {
 	result := data.Items[0].Properties["birthDate"][0].(string)
 	expected := "1993-10-02"
 	if result != expected {
-		t.Errorf("Result should have been \"%s\", but it was \"%s\"", result, expected)
+		t.Errorf("Result should have been \"%s\", but it was \"%s\"", expected, result)
 	}
 }
 
@@ -216,7 +231,7 @@ func TestParseText(t *testing.T) {
 	result := data.Items[0].Properties["price"][0].(string)
 	expected := "3.95"
 	if result != expected {
-		t.Errorf("Result should have been \"%s\", but it was \"%s\"", result, expected)
+		t.Errorf("Result should have been \"%s\", but it was \"%s\"", expected, result)
 	}
 }
 
@@ -231,7 +246,7 @@ func TestParseMultiItemTypes(t *testing.T) {
 	result := len(data.Items[0].Types)
 	expected := 2
 	if result != expected {
-		t.Errorf("Result should have been \"%d\", but it was \"%d\"", result, expected)
+		t.Errorf("Result should have been \"%d\", but it was \"%d\"", expected, result)
 	}
 }
 
@@ -251,13 +266,13 @@ func TestJSON(t *testing.T) {
 	result := string(b)
 	expected := `{"items":[{"type":["http://example.com/Person"],"properties":{"age":["22 years old.."],"name":["Penelope"]}}]}`
 	if result != expected {
-		t.Errorf("Result should have been \"%s\", but it was \"%s\"", result, expected)
+		t.Errorf("Result should have been \"%s\", but it was \"%s\"", expected, result)
 	}
 }
 
 func TestParseHTML(t *testing.T) {
-	buf := newTestBuffer()
-	u, _ := url.Parse("http://example.com")
+	buf := bytes.NewBufferString(gallerySnippet)
+	u, _ := url.Parse("http://blog.example.com/progress-report")
 	contentType := "charset=utf-8"
 
 	_, result := ParseHTML(buf, contentType, u)
@@ -285,19 +300,7 @@ func TestParseURL(t *testing.T) {
 	result := data.Items[0].Properties["name"][0].(string)
 	expected := "Penelope"
 	if result != expected {
-		t.Errorf("Result should have been \"%s\", but it was \"%s\"", result, expected)
-	}
-}
-
-func BenchmarkParser(b *testing.B) {
-	buf := newTestBuffer()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		u, _ := url.Parse("http://example.com")
-		_, err := ParseHTML(buf, "utf-8", u)
-		if err != nil && err != io.EOF {
-			b.Error(err)
-		}
+		t.Errorf("Result should have been \"%s\", but it was \"%s\"", expected, result)
 	}
 }
 
@@ -317,17 +320,146 @@ func ParseData(html string, t *testing.T) *Microdata {
 	return data
 }
 
-func newTestBuffer() *bytes.Buffer {
-	f, err := os.Open("./testdata/blogposting.html")
+func TestParseW3CBookSnippet(t *testing.T) {
+	buf := bytes.NewBufferString(bookSnippet)
+	u, _ := url.Parse("")
+	data, err := ParseHTML(buf, "charset=utf-8", u)
 	if err != nil {
-		panic(err)
+		t.Error(err)
 	}
 
-	buf := bytes.NewBuffer(nil)
-	_, err = buf.ReadFrom(f)
+	b, err := json.Marshal(data)
 	if err != nil {
-		panic(err)
+		t.Fatal(err)
 	}
-	f.Close()
-	return buf
+	result := string(b)
+	expected := `{"items":[{"type":["http://vocab.example.net/book"],"properties":{"author":["Peter F. Hamilton"],"pubdate":["1996-01-26"],"title":["The Reality Dysfunction"]},"id":"urn:isbn:0-330-34032-8"}]}`
+	if result != expected {
+		t.Errorf("Result should have been \"%s\", but it was \"%s\"", expected, result)
+	}
 }
+
+func TestParseW3CGalleySnippet(t *testing.T) {
+	buf := bytes.NewBufferString(gallerySnippet)
+	u, _ := url.Parse("")
+	data, err := ParseHTML(buf, "charset=utf-8", u)
+	if err != nil {
+		t.Error(err)
+	}
+
+	b, err := json.Marshal(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := string(b)
+	expected := `{"items":[{"type":["http://n.whatwg.org/work"],"properties":{"license":["http://www.opensource.org/licenses/mit-license.php"],"title":["The house I found."],"work":["/images/house.jpeg"]}},{"type":["http://n.whatwg.org/work"],"properties":{"license":["http://www.opensource.org/licenses/mit-license.php"],"title":["The mailbox."],"work":["/images/mailbox.jpeg"]}}]}`
+	if result != expected {
+		t.Errorf("Result should have been \"%s\", but it was \"%s\"", expected, result)
+	}
+}
+
+func TestParseW3CBlogSnippet(t *testing.T) {
+	buf := bytes.NewBufferString(blogSnippet)
+	u, _ := url.Parse("http://blog.example.com/progress-report")
+	data, err := ParseHTML(buf, "charset=utf-8", u)
+	if err != nil {
+		t.Error(err)
+	}
+
+	b, err := json.Marshal(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := string(b)
+	expected := `{"items":[{"type":["http://schema.org/BlogPosting"],"properties":{"comment":[{"type":["http://schema.org/UserComments"],"properties":{"commentTime":["2013-08-29"],"creator":[{"type":["http://schema.org/Person"],"properties":{"name":["Greg"]}}],"url":["http://blog.example.com/progress-report#c1"]}},{"type":["http://schema.org/UserComments"],"properties":{"commentTime":["2013-08-29"],"creator":[{"type":["http://schema.org/Person"],"properties":{"name":["Charlotte"]}}],"url":["http://blog.example.com/progress-report#c2"]}}],"datePublished":["2013-08-29"],"headline":["Progress report"],"url":["http://blog.example.com/progress-report?comments=0"]}}]}`
+	if result != expected {
+		t.Errorf("Result should have been \"%s\", but it was \"%s\"", expected, result)
+	}
+}
+
+func BenchmarkParser(b *testing.B) {
+	buf := bytes.NewBufferString(blogSnippet)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		u, _ := url.Parse("http://blog.example.com/progress-report")
+		_, err := ParseHTML(buf, "utf-8", u)
+		if err != nil && err != io.EOF {
+			b.Error(err)
+		}
+	}
+}
+
+// This HTML snippet is taken from the W3C Working Group website at http://www.w3.org/TR/microdata.
+var bookSnippet string = `
+<dl itemscope
+    itemtype="http://vocab.example.net/book"
+    itemid="urn:isbn:0-330-34032-8">
+ <dt>Title</td>
+ <dd itemprop="title">The Reality Dysfunction</dd>
+ <dt>Author</dt>
+ <dd itemprop="author">Peter F. Hamilton</dd>
+ <dt>Publication date</dt>
+ <dd><time itemprop="pubdate" datetime="1996-01-26">26 January 1996</time></dd>
+</dl>`
+
+// This HTML snippet is taken from the W3C Working Group website at http://www.w3.org/TR/microdata.
+var gallerySnippet string = `
+<!DOCTYPE HTML>
+<html>
+ <head>
+  <title>Photo gallery</title>
+ </head>
+ <body>
+  <h1>My photos</h1>
+  <figure itemscope itemtype="http://n.whatwg.org/work" itemref="licenses">
+   <img itemprop="work" src="images/house.jpeg" alt="A white house, boarded up, sits in a forest.">
+   <figcaption itemprop="title">The house I found.</figcaption>
+  </figure>
+  <figure itemscope itemtype="http://n.whatwg.org/work" itemref="licenses">
+   <img itemprop="work" src="images/mailbox.jpeg" alt="Outside the house is a mailbox. It has a leaflet inside.">
+   <figcaption itemprop="title">The mailbox.</figcaption>
+  </figure>
+  <footer>
+   <p id="licenses">All images licensed under the <a itemprop="license"
+   href="http://www.opensource.org/licenses/mit-license.php">MIT
+   license</a>.</p>
+  </footer>
+ </body>
+</html>`
+
+// This HTML document is taken from the W3C Working Group website at http://www.w3.org/TR/microdata.
+var blogSnippet string = `
+<!DOCTYPE HTML>
+<title>My Blog</title>
+<article itemscope itemtype="http://schema.org/BlogPosting">
+ <header>
+  <h1 itemprop="headline">Progress report</h1>
+  <p><time itemprop="datePublished" datetime="2013-08-29">today</time></p>
+  <link itemprop="url" href="?comments=0">
+ </header>
+ <p>All in all, he's doing well with his swim lessons. The biggest thing was he had trouble
+ putting his head in, but we got it down.</p>
+ <section>
+  <h1>Comments</h1>
+  <article itemprop="comment" itemscope itemtype="http://schema.org/UserComments" id="c1">
+   <link itemprop="url" href="#c1">
+   <footer>
+    <p>Posted by: <span itemprop="creator" itemscope itemtype="http://schema.org/Person">
+     <span itemprop="name">Greg</span>
+    </span></p>
+    <p><time itemprop="commentTime" datetime="2013-08-29">15 minutes ago</time></p>
+   </footer>
+   <p>Ha!</p>
+  </article>
+  <article itemprop="comment" itemscope itemtype="http://schema.org/UserComments" id="c2">
+   <link itemprop="url" href="#c2">
+   <footer>
+    <p>Posted by: <span itemprop="creator" itemscope itemtype="http://schema.org/Person">
+     <span itemprop="name">Charlotte</span>
+    </span></p>
+    <p><time itemprop="commentTime" datetime="2013-08-29">5 minutes ago</time></p>
+   </footer>
+   <p>When you say "we got it down"...</p>
+  </article>
+ </section>
+</article>`
