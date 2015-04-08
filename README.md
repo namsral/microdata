@@ -52,9 +52,9 @@ import (
 )
 
 func main() {
-	var result microdata.Result
-	result, _ = microdata.ParseURL("http://example.com/blogposting")
-	b, _ := json.MarshalIndent(result, "", "  ")
+	var data microdata.Microdata
+	data, _ = microdata.ParseURL("http://example.com/blogposting")
+	b, _ := json.MarshalIndent(data, "", "  ")
 	os.Stdout.Write(b)
 }
 ```
