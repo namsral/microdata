@@ -14,7 +14,7 @@ The command line utility returns a JSON object containing any items in the given
 __Install:__
 
 ```sh
-$ go install github.com/namsral/microdata/microdata
+$ go install github.com/namsral/microdata/cmd/microdata
 ```
 
 __Run:__
