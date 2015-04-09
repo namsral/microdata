@@ -101,6 +101,7 @@ func (p *parser) parse() (*Microdata, error) {
 	for _, node := range toplevelNodes {
 		item := NewItem()
 		p.data.addItem(item)
+		p.readAttr(item, node)
 		p.readItem(item, node)
 	}
 
@@ -114,8 +115,6 @@ func (p *parser) readItem(item *Item, node *html.Node) {
 	_, hasScope := getAttr("itemscope", node)
 
 	switch {
-	case hasScope && !hasProp:
-		p.readAttr(item, node)
 	case hasScope && hasProp:
 		subItem := NewItem()
 		p.readAttr(subItem, node)
