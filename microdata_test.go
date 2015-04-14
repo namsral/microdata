@@ -304,6 +304,31 @@ func TestParseURL(t *testing.T) {
 	}
 }
 
+func TestNestedItems(t *testing.T) {
+	html := `
+		<div>
+			<div itemscope itemtype="http://example.com/Person">
+				<p>My name is <span itemprop="name">Penelope</span>.</p>
+				<p>I am <date itemprop="age" value="22">22 years old.</span>.</p>
+				<div itemscope itemtype="http://example.com/Breadcrumb">
+					<a itemprop="url" href="http://example.com/users/1"><span itemprop="title">profile</span></a>
+				</div>
+			</div>
+		</div>`
+
+	data := ParseData(html, t)
+
+	b, err := json.Marshal(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := string(b)
+	expected := `{"items":[{"type":["http://example.com/Person"],"properties":{"age":["22 years old.."],"name":["Penelope"]}},{"type":["http://example.com/Breadcrumb"],"properties":{"title":["profile"],"url":["http://example.com/users/1"]}}]}`
+	if result != expected {
+		t.Errorf("Result should have been \"%s\", but it was \"%s\"", expected, result)
+	}
+}
+
 func ParseData(html string, t *testing.T) *Microdata {
 	r := strings.NewReader(html)
 	u, _ := url.Parse("http://example.com")

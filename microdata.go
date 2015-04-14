@@ -102,7 +102,7 @@ func (p *parser) parse() (*Microdata, error) {
 		item := NewItem()
 		p.data.addItem(item)
 		p.readAttr(item, node)
-		p.readItem(item, node)
+		p.readItem(item, node, true)
 	}
 
 	return p.data, nil
@@ -110,7 +110,7 @@ func (p *parser) parse() (*Microdata, error) {
 
 // readItem traverses the given node tree, applying relevant attributes to the
 // given item.
-func (p *parser) readItem(item *Item, node *html.Node) {
+func (p *parser) readItem(item *Item, node *html.Node, isToplevel bool) {
 	itemprops, hasProp := getAttr("itemprop", node)
 	_, hasScope := getAttr("itemscope", node)
 
@@ -124,7 +124,7 @@ func (p *parser) readItem(item *Item, node *html.Node) {
 			}
 		}
 		for c := node.FirstChild; c != nil; c = c.NextSibling {
-			p.readItem(subItem, c)
+			p.readItem(subItem, c, false)
 		}
 		return
 	case !hasScope && hasProp:
@@ -135,10 +135,12 @@ func (p *parser) readItem(item *Item, node *html.Node) {
 				}
 			}
 		}
+	case hasScope && !hasProp && !isToplevel:
+		return
 	}
 
 	for c := node.FirstChild; c != nil; c = c.NextSibling {
-		p.readItem(item, c)
+		p.readItem(item, c, false)
 	}
 }
 
@@ -162,7 +164,7 @@ func (p *parser) readAttr(item *Item, node *html.Node) {
 		for _, itemref := range strings.Split(s, " ") {
 			if len(itemref) > 0 {
 				if n, ok := p.identifiedNodes[itemref]; ok {
-					p.readItem(item, n)
+					p.readItem(item, n, false)
 				}
 			}
 		}
