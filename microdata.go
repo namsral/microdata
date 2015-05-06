@@ -201,6 +201,12 @@ func (p *parser) getValue(node *html.Node) string {
 			propValue = value
 		}
 	default:
+		// The "content" attribute can be found on other tags besides the meta tag.
+		if value, ok := getAttr("content", node); ok {
+			propValue = value
+			break
+		}
+
 		var buf bytes.Buffer
 		walkNodes(node, func(n *html.Node) {
 			if n.Type == html.TextNode {
