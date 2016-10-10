@@ -60,8 +60,8 @@ $ microdata -format '{{with index .Items 0}}{{with index .Properties "offers" 0}
 Features
 --------
 
-- Windows/BSD/Linux supported.
-- Format output with Go template
+- Windows/BSD/Linux supported
+- Format output with Go templates
 - Parse from Stdin
 
 
