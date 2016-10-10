@@ -23,8 +23,7 @@ func main() {
 
 	baseURL := flag.String("base-url", "http://example.com", "base url to use for the data in the stdin stream.")
 	contentType := flag.String("content-type", "", "content type of the data in the stdin stream.")
-	// format := flag.String("format", "", "format for the output using the syntax of package html/template.")
-	format := flag.String("format", "", `alternate format for the output of the
+	format := flag.String("format", "{{. |jsonMarshal }}", `alternate format for the output of the
 	microdata, using the syntax of package html/template. The default output is
 	equivalent to -f '{{. |jsonMarshal }}'. The struct being passed to the
 	template is:
