@@ -262,7 +262,19 @@ func walkNodes(n *html.Node, f func(*html.Node)) {
 // ParseHTML parses the HTML document available in the given reader and returns
 // the microdata. The given url is used to resolve the URLs in the
 // attributes. The given contentType is used convert the content of r to UTF-8.
+// When the given contentType is equal to "", the content type will be detected
+// using `http.DetectContentType`.
 func ParseHTML(r io.Reader, contentType string, u *url.URL) (*Microdata, error) {
+	if contentType == "" {
+		b := make([]byte, 512)
+		_, err := r.Read(b)
+		if err != nil {
+			return nil, err
+		}
+		contentType = http.DetectContentType(b)
+		r = io.MultiReader(bytes.NewReader(b), r)
+	}
+
 	p, err := newParser(r, contentType, u)
 	if err != nil {
 		return nil, err
