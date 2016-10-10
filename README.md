@@ -14,7 +14,7 @@ Single binaries for Linux, macOS and Windows are available on the [release page]
 Or build from source:
 
 ```sh
-$ go install github.com/namsral/microdata/cmd/microdata
+$ go get -u github.com/namsral/microdata/cmd/microdata
 ```
 
 
