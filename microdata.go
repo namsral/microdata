@@ -48,7 +48,7 @@ type PropertyMap map[string]ValueList
 type Item struct {
 	Types      []string    `json:"type"`
 	Properties PropertyMap `json:"properties"`
-	Id         string      `json:"id,omitempty"`
+	ID         string      `json:"id,omitempty"`
 }
 
 // addString adds the property, value pair to the properties map. It appends to any
@@ -155,7 +155,7 @@ func (p *parser) readAttr(item *Item, node *html.Node) {
 
 		if s, ok := getAttr("itemid", node); ok {
 			if u, err := p.baseURL.Parse(s); err == nil {
-				item.Id = u.String()
+				item.ID = u.String()
 			}
 		}
 	}

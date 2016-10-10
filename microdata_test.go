@@ -95,7 +95,7 @@ func TestParseItemId(t *testing.T) {
 
 	data := ParseData(html, t)
 
-	result := data.Items[0].Id
+	result := data.Items[0].ID
 	expected := "urn:isbn:978-0141196404"
 	if result != expected {
 		t.Errorf("Result should have been \"%s\", but it was \"%s\"", expected, result)
