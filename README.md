@@ -6,40 +6,73 @@ Microdata is a package for the Go programming language to extract [HTML Microdat
 __HTML Microdata__ is a markup specification often used in combination with the [schema collection][3] to make it easier for search engines to identify and understand content on web pages. One of the most common schema is the rating you see when you google for something. Other schemas are persons, places, events, products, etc.
 
 
-Command Line
+Installation
 ------------
 
-The command line utility returns a JSON object containing any items in the given HTML document.
+Single binaries for Linux, macOS and Windows are available on the [release page](https://github.com/namsral/microdata/releases).
 
-__Install:__
+Or build from source:
 
 ```sh
 $ go install github.com/namsral/microdata/cmd/microdata
 ```
 
-__Run:__
+
+Usage
+-----
+
+Parse an URL:
 
 ```sh
-$ microdata http://example.com/blogposting
+$ microdata https://www.gog.com/game/...
 {
   "items": [
     {
       "type": [
-        "http://schema.org/BlogPosting"
+        "http://schema.org/Product"
       ],
       "properties": {
-        "comment": [
+        "additionalProperty": [
           {
             "type": [
-              "http://schema.org/UserComments"
+              "http://schema.org/PropertyValue"
             ],
-            "properties": {
+{
 ...
 ```
 
 
-Library
--------
+Parse HTML from the stdin:
+
+```
+$ cat saved.html |microdata
+```
+
+
+Format the output with a Go template to return the "price" property:
+
+```sh
+$ microdata -format '{{with index .Items 0}}{{with index .Properties "offers" 0}}{{with index .Properties "price" 0 }}{{ . }}{{end}}{{end}}{{end}}' https://www.gog.com/game/...
+8.99
+```
+
+
+Features
+--------
+
+- Windows/BSD/Linux supported.
+- Format output with Go template
+- Parse from Stdin
+
+
+Contribution
+------------
+
+Bug reports and feature requests are welcome. Follow GiHub's guide to [using-pull-requests](https://help.github.com/articles/using-pull-requests/)
+
+
+Go Package
+----------
 
 ```go
 package main
@@ -65,31 +98,3 @@ For documentation see [godoc.org/github.com/namsral/microdata][2].
 [1]: https://golang.org/x/net/html
 [2]: http://godoc.org/github.com/namsral/microdata
 [3]: http://schema.org
-
-License
--------
-
-Copyright (c) 2015 Lars Wiegman. All rights reserved.
-
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are
-met:
-
-   * Redistributions of source code must retain the above copyright
-notice, this list of conditions and the following disclaimer.
-   * Redistributions in binary form must reproduce the above
-copyright notice, this list of conditions and the following disclaimer
-in the documentation and/or other materials provided with the
-distribution.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
